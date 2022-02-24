@@ -11,6 +11,7 @@ import yajco.generator.FilesGenerator;
 import yajco.generator.GeneratorException;
 import yajco.generator.parsergen.CompilerGenerator;
 import yajco.generator.util.ServiceFinder;
+import yajco.generator.xmlserializer.XMLserializer;
 import yajco.model.*;
 import yajco.model.pattern.Pattern;
 import yajco.model.pattern.PatternSupport;
@@ -31,8 +32,8 @@ import java.io.InputStream;
 import java.io.PrintWriter;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
-import java.util.*;
 import java.util.Optional;
+import java.util.*;
 
 @SupportedSourceVersion(SourceVersion.RELEASE_11)
 @SupportedAnnotationTypes({"yajco.annotation.config.Parser", "yajco.annotation.Exclude"})
@@ -209,7 +210,10 @@ public class AnnotationProcessor extends AbstractProcessor {
             //e.printStackTrace();
             // asi CHYBA v MAVEN ze nevie dostat Messager
             //processingEnv.getMessager().printMessage(Kind.ERROR, e.getMessage());
-
+            ServiceFinder.findFilesGenerators(properties).stream()
+                .filter(f -> f.getClass() == XMLserializer.class)
+                .findFirst()
+                .ifPresent(xmlSerializer -> xmlSerializer.generateFiles(language, processingEnv.getFiler(), properties));
             logger.error(e.getMessage(), e);
             throw new RuntimeException(e);
         }
@@ -352,7 +356,7 @@ public class AnnotationProcessor extends AbstractProcessor {
     /**
      * Processes language model elements and creates unique language concepts for all of them.
      *
-     * @param typeElement Language model element to process.
+     * @param typeElement  Language model element to process.
      * @param superConcept Parent concept.
      * @return Processed language concept.
      */
@@ -398,7 +402,7 @@ public class AnnotationProcessor extends AbstractProcessor {
      * Processes language model element according to its kind.
      *
      * @param typeElement Language model element.
-     * @param concept Language concept for representing language model element.
+     * @param concept     Language concept for representing language model element.
      */
     private void processTypeElementAccordingToKind(TypeElement typeElement, Concept concept) {
         if (typeElement.getKind() == ElementKind.ENUM) { // Enum type
@@ -420,7 +424,7 @@ public class AnnotationProcessor extends AbstractProcessor {
     /**
      * Processes Enum language model elements.
      *
-     * @param concept Language concept representing language model element.
+     * @param concept     Language concept representing language model element.
      * @param typeElement Language model element.
      */
     private void processEnum(Concept concept, TypeElement typeElement) {
@@ -446,7 +450,7 @@ public class AnnotationProcessor extends AbstractProcessor {
     /**
      * Processes concrete classes of language model.
      *
-     * @param concept Language concept representing language model element.
+     * @param concept      Language concept representing language model element.
      * @param classElement Language model element.
      */
     private void processConcreteClass(Concept concept, TypeElement classElement) {
@@ -457,7 +461,7 @@ public class AnnotationProcessor extends AbstractProcessor {
     /**
      * Parses concepts concrete syntax.
      *
-     * @param concept Language concept representing language model element.
+     * @param concept      Language concept representing language model element.
      * @param classElement Language model element.
      */
     private void defineConcreteSyntax(Concept concept, TypeElement classElement) {
@@ -499,8 +503,8 @@ public class AnnotationProcessor extends AbstractProcessor {
     /**
      * Processes constructor annotated with @UnorderedParameters annotation.
      *
-     * @param concept Language concept.
-     * @param notation Language concept notation.
+     * @param concept                       Language concept.
+     * @param notation                      Language concept notation.
      * @param unorderedParametersAnnotation UnorderedParameters annotation
      */
     private void processUnorderedParamsConstructor(Concept concept, ExecutableElement constructor, Notation notation, UnorderedParameters unorderedParametersAnnotation) {
@@ -514,7 +518,7 @@ public class AnnotationProcessor extends AbstractProcessor {
                 processParameter(concept, notation, paramElement);
                 excludedCount++;
                 cantBeUnordered = unorderedCount > 0 && excludedCount > 0;
-            } else if (getType(paramElement.asType()) instanceof OptionalType)  {
+            } else if (getType(paramElement.asType()) instanceof OptionalType) {
                 UnorderedParamPart unorderedParamPart = new UnorderedParamPart(null);
                 OptionalPart optionalPart = (OptionalPart) processCompoundParameter(concept, paramElement, new OptionalPart(null));
                 unorderedParamPart.addPart(optionalPart);
@@ -538,7 +542,7 @@ public class AnnotationProcessor extends AbstractProcessor {
     /**
      * Parses concepts abstract syntax.
      *
-     * @param concept Language concept representing language model element.
+     * @param concept      Language concept representing language model element.
      * @param classElement Language model element.
      */
     private void defineAbstractSytax(Concept concept, TypeElement classElement) {
@@ -562,7 +566,7 @@ public class AnnotationProcessor extends AbstractProcessor {
     /**
      * Processes abstract classes of language model elements
      *
-     * @param concept Language concept representing language model element.
+     * @param concept     Language concept representing language model element.
      * @param typeElement Language model element.
      */
     private void processAbstractClass(Concept concept, TypeElement typeElement) {
@@ -573,7 +577,7 @@ public class AnnotationProcessor extends AbstractProcessor {
     /**
      * Processes interfaces of language model elements
      *
-     * @param concept Language concept representing language model element.
+     * @param concept     Language concept representing language model element.
      * @param typeElement Language model element.
      */
     private void processInterface(Concept concept, TypeElement typeElement) {
@@ -582,8 +586,8 @@ public class AnnotationProcessor extends AbstractProcessor {
     /**
      * Processes parameters of constructor or factory method in language model.
      *
-     * @param concept Language concept.
-     * @param notation Notation of language concept.
+     * @param concept      Language concept.
+     * @param notation     Notation of language concept.
      * @param paramElement Parameter of constructor or factory method.
      */
     private void processParameter(Concept concept, Notation notation, VariableElement paramElement) {
@@ -643,10 +647,9 @@ public class AnnotationProcessor extends AbstractProcessor {
     /**
      * Processes compound parameters (Parameters which know their whole concrete syntax).
      *
-     * @param concept Language concept.
+     * @param concept      Language concept.
      * @param paramElement Parameter of constructor or factory method.
      * @param notationPart Compound notation part.
-     *
      * @return Compound notation part.
      */
     private CompoundNotationPart processCompoundParameter(Concept concept, VariableElement paramElement, CompoundNotationPart notationPart) {
@@ -716,7 +719,7 @@ public class AnnotationProcessor extends AbstractProcessor {
         String regex = formatStringTokenRegex(stringTokenAnnotation);
         TokenDef tokenDef = null;
 
-        for (TokenDef token: language.getTokens()) {
+        for (TokenDef token : language.getTokens()) {
             if (token.getName().contains(DEFAULT_STRING_TOKEN_NAME) && token.getRegexp().equals(regex)) {
                 // Use existing string token with the same regex.
                 tokenDef = token;
@@ -728,7 +731,7 @@ public class AnnotationProcessor extends AbstractProcessor {
         }
 
         // Add string token to language.
-        addToListAsSet(language.getTokens(), Collections.singletonList(tokenDef),false);
+        addToListAsSet(language.getTokens(), Collections.singletonList(tokenDef), false);
 
         return tokenDef;
     }
@@ -752,10 +755,10 @@ public class AnnotationProcessor extends AbstractProcessor {
     /**
      * Processes referenced concept.
      *
-     * @param concept Language concept.
+     * @param concept      Language concept.
      * @param paramElement Parameter of constructor or factory method.
-     * @param references References annotation.
-     * @param part  Local variable notation part.
+     * @param references   References annotation.
+     * @param part         Local variable notation part.
      * @return Binding notation part.
      */
     private BindingNotationPart processReferencedConcept(Concept concept, VariableElement paramElement, References references, LocalVariablePart part) {
@@ -794,9 +797,9 @@ public class AnnotationProcessor extends AbstractProcessor {
     /**
      * Finds referenced property.
      *
-     * @param paramElement Parameter of constructor or factory method in language model.
+     * @param paramElement      Parameter of constructor or factory method in language model.
      * @param referencedConcept Referenced concept.
-     * @param proposedName Referenced field name.
+     * @param proposedName      Referenced field name.
      * @return Referenced property.
      */
     private Property findReferencedProperty(VariableElement paramElement, Concept referencedConcept, String proposedName) {
@@ -851,7 +854,7 @@ public class AnnotationProcessor extends AbstractProcessor {
     /**
      * Finds YAJCo component type of element.
      *
-     * @param type Type of language model element.
+     * @param type      Type of language model element.
      * @param yajcoType YAJCo model type.
      * @param <T>
      * @return YAJCo component type of element.
@@ -886,7 +889,7 @@ public class AnnotationProcessor extends AbstractProcessor {
     private boolean isSpecifiedClassType(TypeMirror type, Class clazz) {
         TypeElement referencedTypeElement = (TypeElement) processingEnv.getTypeUtils().asElement(type);
         return clazz != null && referencedTypeElement != null
-                && referencedTypeElement.getQualifiedName().toString().equals(clazz.getName());
+            && referencedTypeElement.getQualifiedName().toString().equals(clazz.getName());
     }
 
     /**
@@ -919,9 +922,9 @@ public class AnnotationProcessor extends AbstractProcessor {
         } else if (type.toString().equals(Boolean.class.getName())) {
             return new yajco.model.type.PrimitiveType(PrimitiveTypeConst.BOOLEAN, type);
         } else if (type.toString().equals(Byte.class.getName())
-                || type.toString().equals(Short.class.getName())
-                || type.toString().equals(Integer.class.getName())
-                || type.toString().equals(Long.class.getName())) {
+            || type.toString().equals(Short.class.getName())
+            || type.toString().equals(Integer.class.getName())
+            || type.toString().equals(Long.class.getName())) {
             return new yajco.model.type.PrimitiveType(PrimitiveTypeConst.INTEGER, type);
         } else if (type.toString().equals(Float.class.getName()) || type.toString().equals(Double.class.getName())) {
             return new yajco.model.type.PrimitiveType(PrimitiveTypeConst.REAL, type);
@@ -977,7 +980,7 @@ public class AnnotationProcessor extends AbstractProcessor {
      */
     private boolean isConstructor(Element element) {
         return element.getKind() == ElementKind.CONSTRUCTOR && element.getModifiers().contains(Modifier.PUBLIC)
-                && element.getAnnotation(Exclude.class) == null;
+            && element.getAnnotation(Exclude.class) == null;
     }
 
     /**
@@ -988,7 +991,7 @@ public class AnnotationProcessor extends AbstractProcessor {
      */
     private boolean isFactoryMethod(Element element) {
         return element.getKind() == ElementKind.METHOD && element.getModifiers().contains(Modifier.PUBLIC)
-                && element.getAnnotation(FactoryMethod.class) != null && element.getAnnotation(Exclude.class) == null;
+            && element.getAnnotation(FactoryMethod.class) != null && element.getAnnotation(Exclude.class) == null;
     }
 
     /**
@@ -1033,7 +1036,7 @@ public class AnnotationProcessor extends AbstractProcessor {
      * Otherwise returns false.
      *
      * @param superElement supertype
-     * @param element element
+     * @param element      element
      * @return true if superElement is the direct super class of the element.
      */
     private boolean isDirectSubtype(TypeElement superElement, Element element) {
@@ -1073,6 +1076,7 @@ public class AnnotationProcessor extends AbstractProcessor {
 
     //TOTO je klucove pre otvorenost procesora, kopiruje vzor uvedeny v anotacii do modelu
     //TODO - navrhujem doplnit kontrolu podla typu vzoru
+
     /**
      * Finds if language model elements annotation is annotated with @MapsTo annotations.
      *
@@ -1094,7 +1098,7 @@ public class AnnotationProcessor extends AbstractProcessor {
     /**
      * Adds patterns from annotations to language.
      *
-     * @param element Language model element.
+     * @param element        Language model element.
      * @param patternSupport Language concept.
      * @param <T>
      */
@@ -1121,7 +1125,7 @@ public class AnnotationProcessor extends AbstractProcessor {
      * Creates object from annotation.
      *
      * @param mapsToClass Class that reflects annotation function.
-     * @param am Annotation
+     * @param am          Annotation
      * @return Pattern
      */
     private Pattern createObjectFromAnnotation(String mapsToClass, AnnotationMirror am) {
@@ -1170,7 +1174,7 @@ public class AnnotationProcessor extends AbstractProcessor {
             }
         } else {
             throw new GeneratorException("No compiler generator in class path. Include service implementation of " +
-                    CompilerGenerator.class.getName() + " in your classpath. (see java.util.ServiceLoader javadoc for details)");
+                CompilerGenerator.class.getName() + " in your classpath. (see java.util.ServiceLoader javadoc for details)");
         }
     }
 
@@ -1179,7 +1183,7 @@ public class AnnotationProcessor extends AbstractProcessor {
      * Processes direct subclasses of language model element.
      *
      * @param typeElement Language model element.
-     * @param concept Language concept representing language model element.
+     * @param concept     Language concept representing language model element.
      */
     private void processDirectSubclasses(TypeElement typeElement, Concept concept) {
         System.out.print("DirectSubtypes of " + typeElement.getSimpleName() + " are: ");
@@ -1194,8 +1198,8 @@ public class AnnotationProcessor extends AbstractProcessor {
      * Adds new items to original list according to overwrite flag.
      *
      * @param originalList Original list.
-     * @param newItems List of new items.
-     * @param overwrite Overwrite flag.
+     * @param newItems     List of new items.
+     * @param overwrite    Overwrite flag.
      * @param <T>
      */
     private <T> void addToListAsSet(List<T> originalList, List<T> newItems, boolean overwrite) {
